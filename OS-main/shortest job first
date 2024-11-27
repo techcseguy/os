@@ -1,0 +1,89 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+
+class Process {
+public:
+    int pid;           // Process ID
+    int arrivalTime;   // Time when process arrives
+    int burstTime;     // Total CPU time needed
+    int waitingTime;   // Time spent waiting in the queue
+    int turnaroundTime;// Total time from arrival to completion
+
+    Process(int id, int arrival, int burst) 
+        : pid(id), arrivalTime(arrival), burstTime(burst), 
+          waitingTime(0), turnaroundTime(0) {}
+};
+
+void sjfScheduling(std::vector<Process>& processes) {
+    // Sort processes by arrival time and then by burst time
+    std::sort(processes.begin(), processes.end(), 
+        [](const Process& a, const Process& b) {
+            if (a.arrivalTime == b.arrivalTime) {
+                return a.burstTime < b.burstTime;
+            }
+            return a.arrivalTime < b.arrivalTime;
+        });
+
+    int currentTime = processes[0].arrivalTime;
+    double totalWaitingTime = 0;
+    double totalTurnaroundTime = 0;
+
+    for (auto& process : processes) {
+        // Calculate waiting time
+        process.waitingTime = std::max(0, currentTime - process.arrivalTime);
+
+        // Update current time after processing
+        currentTime += process.burstTime;
+
+        // Calculate turnaround time
+        process.turnaroundTime = process.waitingTime + process.burstTime;
+
+        // Add to total times
+        totalWaitingTime += process.waitingTime;
+        totalTurnaroundTime += process.turnaroundTime;
+    }
+
+    // Print results
+    std::cout << "SJF Scheduling Results (Processes with Same Arrival Time):" << std::endl;
+    std::cout << std::left 
+              << std::setw(10) << "Process" 
+              << std::setw(15) << "Arrival Time" 
+              << std::setw(15) << "Burst Time" 
+              << std::setw(15) << "Waiting Time" 
+              << "Turnaround Time" << std::endl;
+
+    for (const auto& p : processes) {
+        std::cout << std::left 
+                  << std::setw(10) << p.pid 
+                  << std::setw(15) << p.arrivalTime 
+                  << std::setw(15) << p.burstTime 
+                  << std::setw(15) << p.waitingTime 
+                  << p.turnaroundTime << std::endl;
+    }
+
+    // Calculate and print averages
+    double avgWaitingTime = totalWaitingTime / processes.size();
+    double avgTurnaroundTime = totalTurnaroundTime / processes.size();
+
+    std::cout << "\nAverage Waiting Time: " 
+              << std::fixed << std::setprecision(2) << avgWaitingTime << std::endl;
+    std::cout << "Average Turnaround Time: " 
+              << std::fixed << std::setprecision(2) << avgTurnaroundTime << std::endl;
+}
+
+int main() {
+    // Create a vector of processes with SAME arrival time
+    std::vector<Process> processes = {
+        Process(1, 0, 7),   // Process 1: Arrives at time 0, needs 7 time units
+        Process(2, 0, 4),   // Process 2: Arrives at time 0, needs 4 time units
+        Process(3, 0, 2),   // Process 3: Arrives at time 0, needs 2 time units
+        Process(4, 0, 5)    // Process 4: Arrives at time 0, needs 5 time units
+    };
+
+    // Perform SJF scheduling
+    sjfScheduling(processes);
+
+    return 0;
+}

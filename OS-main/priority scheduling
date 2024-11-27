@@ -1,0 +1,168 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+#include <limits>
+
+class Process {
+public:
+    int pid;           // Process ID
+    int arrivalTime;   // Time when process arrives
+    int burstTime;     // Total CPU time needed
+    int priority;      // Priority of the process
+    int waitingTime;   // Time spent waiting in the queue
+    int turnaroundTime;// Total time from arrival to completion
+    int remainingTime; // Remaining time for preemptive scheduling
+
+    Process(int id, int arrival, int burst, int prior) 
+        : pid(id), arrivalTime(arrival), burstTime(burst), priority(prior),
+          waitingTime(0), turnaroundTime(0), remainingTime(burst) {}
+};
+
+void priorityScheduling(std::vector<Process>& processes, bool isPreemptive) {
+    // Sort processes by arrival time
+    std::sort(processes.begin(), processes.end(), 
+        [](const Process& a, const Process& b) {
+            return a.arrivalTime < b.arrivalTime;
+        });
+
+    std::vector<Process> completed;
+    int currentTime = 0;
+    double totalWaitingTime = 0;
+    double totalTurnaroundTime = 0;
+
+    while (!processes.empty()) {
+        // Find eligible processes (arrived by current time)
+        std::vector<Process> eligibleProcesses;
+        for (auto& p : processes) {
+            if (p.arrivalTime <= currentTime) {
+                eligibleProcesses.push_back(p);
+            }
+        }
+
+        // If no processes are eligible, move time forward
+        if (eligibleProcesses.empty()) {
+            currentTime = processes[0].arrivalTime;
+            continue;
+        }
+
+        // Select process based on priority
+        Process* currentProcess = nullptr;
+        if (isPreemptive) {
+            // Preemptive Priority Scheduling
+            currentProcess = &*std::min_element(
+                eligibleProcesses.begin(), 
+                eligibleProcesses.end(),
+                [](const Process& a, const Process& b) {
+                    return a.priority < b.priority;
+                }
+            );
+
+            // Process for one time unit
+            currentProcess->remainingTime--;
+            currentTime++;
+
+            // Check if process is completed
+            if (currentProcess->remainingTime == 0) {
+                // Calculate turnaround and waiting times
+                currentProcess->turnaroundTime = currentTime - currentProcess->arrivalTime;
+                currentProcess->waitingTime = 
+                    currentProcess->turnaroundTime - currentProcess->burstTime;
+
+                // Move to completed list
+                completed.push_back(*currentProcess);
+
+                // Remove from original processes
+                processes.erase(
+                    std::remove_if(processes.begin(), processes.end(),
+                        [&](const Process& p) { return p.pid == currentProcess->pid; }),
+                    processes.end()
+                );
+            }
+        }
+        else {
+            // Non-Preemptive Priority Scheduling
+            currentProcess = &*std::min_element(
+                eligibleProcesses.begin(), 
+                eligibleProcesses.end(),
+                [](const Process& a, const Process& b) {
+                    return a.priority < b.priority;
+                }
+            );
+
+            // Calculate waiting time
+            currentProcess->waitingTime = std::max(0, currentTime - currentProcess->arrivalTime);
+
+            // Update current time
+            currentTime += currentProcess->burstTime;
+
+            // Calculate turnaround time
+            currentProcess->turnaroundTime = 
+                currentProcess->waitingTime + currentProcess->burstTime;
+
+            // Move to completed list
+            completed.push_back(*currentProcess);
+
+            // Remove from original processes
+            processes.erase(
+                std::remove_if(processes.begin(), processes.end(),
+                    [&](const Process& p) { return p.pid == currentProcess->pid; }),
+                processes.end()
+            );
+        }
+
+        // Add to total times
+        totalWaitingTime += currentProcess->waitingTime;
+        totalTurnaroundTime += currentProcess->turnaroundTime;
+    }
+
+    // Print results
+    std::string schedulingType = isPreemptive ? "Preemptive" : "Non-Preemptive";
+    std::cout << schedulingType << " Priority Scheduling Results:" << std::endl;
+    std::cout << std::left << std::setw(10) << "Process" 
+              << std::setw(15) << "Arrival Time" 
+              << std::setw(15) << "Burst Time" 
+              << std::setw(15) << "Priority"
+              << std::setw(15) << "Waiting Time" 
+              << "Turnaround Time" << std::endl;
+
+    for (const auto& p : completed) {
+        std::cout << std::left << std::setw(10) << p.pid 
+                  << std::setw(15) << p.arrivalTime 
+                  << std::setw(15) << p.burstTime 
+                  << std::setw(15) << p.priority
+                  << std::setw(15) << p.waitingTime 
+                  << p.turnaroundTime << std::endl;
+    }
+
+    // Calculate and print averages
+    double avgWaitingTime = totalWaitingTime / completed.size();
+    double avgTurnaroundTime = totalTurnaroundTime / completed.size();
+
+    std::cout << "\nAverage Waiting Time: " 
+              << std::fixed << std::setprecision(2) << avgWaitingTime << std::endl;
+    std::cout << "Average Turnaround Time: " 
+              << std::fixed << std::setprecision(2) << avgTurnaroundTime << std::endl;
+}
+
+int main() {
+    // Create a vector of processes with different priorities
+    std::vector<Process> processes_non_preemptive = {
+        Process(1, 0, 10, 3),  // Process 1: Arrives at 0, burst 10, priority 3
+        Process(2, 1, 5, 1),   // Process 2: Arrives at 1, burst 5, priority 1 (highest)
+        Process(3, 2, 8, 4),   // Process 3: Arrives at 2, burst 8, priority 4
+        Process(4, 3, 6, 2)    // Process 4: Arrives at 3, burst 6, priority 2
+    };
+
+    // Create a vector of processes for preemptive scheduling
+    std::vector<Process> processes_preemptive = processes_non_preemptive;
+
+    // Perform Non-Preemptive Priority Scheduling
+    priorityScheduling(processes_non_preemptive, false);
+
+    // Perform Preemptive Priority Scheduling
+    std::cout << "\n\n";
+    priorityScheduling(processes_preemptive, true);
+
+    return 0;
+}
