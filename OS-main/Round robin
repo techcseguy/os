@@ -1,0 +1,132 @@
+#include <iostream>
+#include <queue>
+#include <vector>
+#include <algorithm>
+
+class Process {
+public:
+    int id;
+    int arrivalTime;
+    int burstTime;
+    int remainingTime;
+    int waitingTime;
+    int turnaroundTime;
+
+    Process(int _id, int _arrival, int _burst) : 
+        id(_id), 
+        arrivalTime(_arrival), 
+        burstTime(_burst), 
+        remainingTime(_burst), 
+        waitingTime(0), 
+        turnaroundTime(0) {}
+};
+
+class RoundRobinScheduler {
+private:
+    std::vector<Process> processes;
+    int timeQuantum;
+    int currentTime;
+
+public:
+    RoundRobinScheduler(int quantum) : timeQuantum(quantum), currentTime(0) {}
+
+    void addProcess(int id, int arrivalTime, int burstTime) {
+        processes.emplace_back(id, arrivalTime, burstTime);
+    }
+
+    void scheduleProcesses() {
+        // Sort processes by arrival time
+        std::sort(processes.begin(), processes.end(), 
+            [](const Process& a, const Process& b) {
+                return a.arrivalTime < b.arrivalTime;
+            });
+
+        std::queue<Process*> readyQueue;
+        size_t processIndex = 0;
+        int completedProcesses = 0;
+
+        // Add initial processes to ready queue
+        while (processIndex < processes.size() && 
+               processes[processIndex].arrivalTime <= currentTime) {
+            readyQueue.push(&processes[processIndex]);
+            processIndex++;
+        }
+
+        while (completedProcesses < processes.size()) {
+            if (readyQueue.empty()) {
+                // If no processes are ready, advance time
+                currentTime = processes[processIndex].arrivalTime;
+                
+                // Add newly arrived processes
+                while (processIndex < processes.size() && 
+                       processes[processIndex].arrivalTime <= currentTime) {
+                    readyQueue.push(&processes[processIndex]);
+                    processIndex++;
+                }
+                continue;
+            }
+
+            Process* currentProcess = readyQueue.front();
+            readyQueue.pop();
+
+            // Execute process for time quantum or remaining time
+            int executeTime = std::min(timeQuantum, currentProcess->remainingTime);
+            currentProcess->remainingTime -= executeTime;
+            currentTime += executeTime;
+
+            // Add newly arrived processes during execution
+            while (processIndex < processes.size() && 
+                   processes[processIndex].arrivalTime <= currentTime) {
+                readyQueue.push(&processes[processIndex]);
+                processIndex++;
+            }
+
+            // If process is not completed, add back to queue
+            if (currentProcess->remainingTime > 0) {
+                readyQueue.push(currentProcess);
+            } else {
+                // Process is completed
+                currentProcess->turnaroundTime = currentTime - currentProcess->arrivalTime;
+                currentProcess->waitingTime = currentProcess->turnaroundTime - currentProcess->burstTime;
+                completedProcesses++;
+            }
+        }
+    }
+
+    void printResults() {
+        std::cout << "Process\tArrival\tBurst\tWaiting\tTurnaround" << std::endl;
+        for (const auto& process : processes) {
+            std::cout << process.id << "\t" 
+                      << process.arrivalTime << "\t" 
+                      << process.burstTime << "\t" 
+                      << process.waitingTime << "\t" 
+                      << process.turnaroundTime << std::endl;
+        }
+
+        // Calculate average waiting and turnaround times
+        double avgWaitingTime = 0, avgTurnaroundTime = 0;
+        for (const auto& process : processes) {
+            avgWaitingTime += process.waitingTime;
+            avgTurnaroundTime += process.turnaroundTime;
+        }
+        avgWaitingTime /= processes.size();
+        avgTurnaroundTime /= processes.size();
+
+        std::cout << "\nAverage Waiting Time: " << avgWaitingTime << std::endl;
+        std::cout << "Average Turnaround Time: " << avgTurnaroundTime << std::endl;
+    }
+};
+
+int main() {
+    RoundRobinScheduler scheduler(4);  // Time quantum of 4 time units
+
+    // Add processes: (ID, Arrival Time, Burst Time)
+    scheduler.addProcess(1, 0, 10);
+    scheduler.addProcess(2, 1, 5);
+    scheduler.addProcess(3, 3, 8);
+
+    scheduler.scheduleProcesses();
+    scheduler.printResults();
+
+    return 0;
+}
