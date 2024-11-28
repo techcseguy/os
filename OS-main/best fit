@@ -1,0 +1,192 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <limits>
+#include <stdexcept>
+
+class BestFitMemoryManager {
+private:
+    struct MemoryBlock {
+        size_t start;       // Starting address
+        size_t size;        // Block size
+        bool is_free;       // Allocation status
+
+        MemoryBlock(size_t _start, size_t _size, bool _free = true)
+            : start(_start), size(_size), is_free(_free) {}
+    };
+
+    size_t total_memory;
+    std::vector<MemoryBlock> memory_blocks;
+
+    // Find best fit block for allocation
+    std::vector<MemoryBlock>::iterator findBestFitBlock(size_t request_size) {
+        auto best_block = memory_blocks.end();
+        size_t smallest_difference = std::numeric_limits<size_t>::max();
+
+        for (auto it = memory_blocks.begin(); it != memory_blocks.end(); ++it) {
+            if (it->is_free && it->size >= request_size) {
+                size_t current_difference = it->size - request_size;
+                
+                // Update best block if this block is a better fit
+                if (current_difference < smallest_difference) {
+                    smallest_difference = current_difference;
+                    best_block = it;
+                }
+            }
+        }
+
+        return best_block;
+    }
+
+public:
+    // Constructor
+    BestFitMemoryManager(size_t total_size) : total_memory(total_size) {
+        // Initialize with one large free block
+        memory_blocks.emplace_back(0, total_size);
+    }
+
+    // Allocate memory using Best Fit
+    size_t allocate(size_t request_size) {
+        // Validate allocation request
+        if (request_size == 0) {
+            throw std::invalid_argument("Cannot allocate zero bytes");
+        }
+
+        // Find best suitable block
+        auto block_it = findBestFitBlock(request_size);
+
+        // Check if no suitable block found
+        if (block_it == memory_blocks.end()) {
+            throw std::runtime_error("Out of memory");
+        }
+
+        // Handle exact fit
+        if (block_it->size == request_size) {
+            block_it->is_free = false;
+            return block_it->start;
+        }
+
+        // Split the block
+        size_t original_start = block_it->start;
+        size_t original_size = block_it->size;
+
+        // Modify existing block
+        block_it->size = request_size;
+        block_it->is_free = false;
+
+        // Insert remaining free block
+        memory_blocks.insert(
+            block_it + 1, 
+            MemoryBlock(original_start + request_size, 
+                        original_size - request_size)
+        );
+
+        return original_start;
+    }
+
+    // Free allocated memory
+    void free(size_t start_address) {
+        // Find block to free
+        auto block_it = std::find_if(memory_blocks.begin(), memory_blocks.end(), 
+            [start_address](const MemoryBlock& block) {
+                return block.start == start_address && !block.is_free;
+            });
+
+        if (block_it == memory_blocks.end()) {
+            throw std::invalid_argument("Invalid memory address");
+        }
+
+        // Mark block as free
+        block_it->is_free = true;
+
+        // Merge with next block if free
+        auto next_block = block_it + 1;
+        if (next_block != memory_blocks.end() && next_block->is_free) {
+            block_it->size += next_block->size;
+            memory_blocks.erase(next_block);
+        }
+
+        // Merge with previous block if free
+        if (block_it != memory_blocks.begin()) {
+            auto prev_block = block_it - 1;
+            if (prev_block->is_free) {
+                prev_block->size += block_it->size;
+                memory_blocks.erase(block_it);
+            }
+        }
+    }
+
+    // Display memory layout
+    void printMemoryLayout() const {
+        std::cout << "Memory Layout:\n";
+        std::cout << "Start\tSize\tStatus\n";
+        std::cout << "-----------------------------\n";
+
+        for (const auto& block : memory_blocks) {
+            std::cout << block.start << "\t"
+                      << block.size << "\t"
+                      << (block.is_free ? "Free" : "Allocated")
+                      << std::endl;
+        }
+    }
+
+    // Get total free memory
+    size_t getFreeMemory() const {
+        return std::accumulate(memory_blocks.begin(), memory_blocks.end(), 
+            static_cast<size_t>(0),
+            [](size_t total, const MemoryBlock& block) {
+                return total + (block.is_free ? block.size : 0);
+            });
+    }
+};
+
+int main() {
+    try {
+        // Create memory manager with 1000 units
+        BestFitMemoryManager memoryManager(1000);
+
+        // Initial memory layout
+        std::cout << "Initial Memory Layout:\n";
+        memoryManager.printMemoryLayout();
+        std::cout << "\n";
+
+        // Allocate memory blocks of different sizes
+        size_t addr1 = memoryManager.allocate(200);
+        std::cout << "Allocated 200 units at " << addr1 << std::endl;
+        memoryManager.printMemoryLayout();
+        std::cout << "\n";
+
+        size_t addr2 = memoryManager.allocate(300);
+        std::cout << "Allocated 300 units at " << addr2 << std::endl;
+        memoryManager.printMemoryLayout();
+        std::cout << "\n";
+
+        size_t addr3 = memoryManager.allocate(150);
+        std::cout << "Allocated 150 units at " << addr3 << std::endl;
+        memoryManager.printMemoryLayout();
+        std::cout << "\n";
+
+        // Free first allocated block
+        memoryManager.free(addr1);
+        std::cout << "Freed memory at " << addr1 << std::endl;
+        memoryManager.printMemoryLayout();
+        std::cout << "\n";
+
+        // Allocate a new block
+        size_t addr4 = memoryManager.allocate(100);
+        std::cout << "Allocated 100 units at " << addr4 << std::endl;
+        memoryManager.printMemoryLayout();
+        std::cout << "\n";
+
+        // Check free memory
+        std::cout << "Total Free Memory: " 
+                  << memoryManager.getFreeMemory() 
+                  << " units\n";
+
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
